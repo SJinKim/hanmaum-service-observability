@@ -27,7 +27,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "docker-compose.yml,alloy,caddy,grafana,loki,prometheus"
-          target: /opt/hanmaum-observability
+          target: /opt/hanmaum-service-observability
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -37,10 +37,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-            cd /opt/hanmaum-observability
+            cd /opt/hanmaum-service-observability
 
             test -f .env \
-              || { echo "Missing /opt/hanmaum-observability/.env"; exit 1; }
+              || { echo "Missing /opt/hanmaum-service-observability/.env"; exit 1; }
 
             set -a && source .env && set +a
             mkdir -p caddy/generated

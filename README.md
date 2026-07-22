@@ -49,9 +49,9 @@ Prometheus instance.
    Caddy mount, so Docker does not create the bind-mount directory as root:
 
    ```bash
-   sudo mkdir -p /opt/hanmaum-observability
-   sudo chown -R "$USER":"$USER" /opt/hanmaum-observability
-   cd /opt/hanmaum-observability
+   sudo mkdir -p /opt/hanmaum-service-observability
+   sudo chown -R "$USER":"$USER" /opt/hanmaum-service-observability
+   cd /opt/hanmaum-service-observability
    GRAFANA_PASSWORD="$(openssl rand -hex 32)"
    cat > .env <<EOF
    GRAFANA_DOMAIN=grafana.example.com
