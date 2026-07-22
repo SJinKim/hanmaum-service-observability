@@ -1,0 +1,45 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: hanmaum
+    location: hetzner
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+        labels:
+          service: prometheus
+          environment: shared
+
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: hetzner-host
+          environment: shared
+
+  - job_name: containers
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          service: docker
+          environment: shared
+
+  # Spring Boot services expose /actuator/prometheus on the private
+  # observability network. Add future Spring targets to this watched file.
+  - job_name: spring-services
+    metrics_path: /actuator/prometheus
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/spring/*.json
+        refresh_interval: 30s
+
+  # Keycloak exposes /metrics on its private management port (9000).
+  - job_name: keycloak
+    metrics_path: /metrics
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/keycloak/*.json
+        refresh_interval: 30s

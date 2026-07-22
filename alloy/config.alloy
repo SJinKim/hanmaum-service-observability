@@ -1,0 +1,112 @@
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+discovery.docker "host" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "10s"
+}
+
+// Only containers explicitly opted into observability are collected. This keeps
+// database and monitoring-internal logs out of Loki by default.
+discovery.relabel "selected_containers" {
+	targets = discovery.docker.host.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_observability_logs_enabled"]
+		regex         = "true"
+		action        = "keep"
+	}
+}
+
+// Keep only bounded, operational labels. User IDs, request IDs, IP addresses,
+// and other high-cardinality values remain unindexed (and PII is redacted below).
+discovery.relabel "log_labels" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_observability_service"]
+		target_label  = "service_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_observability_environment"]
+		target_label  = "environment"
+	}
+
+	rule {
+		target_label = "platform"
+		replacement  = "docker"
+	}
+}
+
+loki.source.docker "hanmaum" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.selected_containers.output
+	relabel_rules = discovery.relabel.log_labels.rules
+	forward_to    = [loki.process.hanmaum.receiver]
+}
+
+loki.process "hanmaum" {
+	stage.docker { }
+
+	// Defense in depth: remove common identity and credential values before Loki
+	// persists a line. Application code must still never log PII or secrets.
+	stage.replace {
+		expression = `(?i)(?:ipAddress|remoteAddress|userId|username|email|sessionId)=\\?"?([^,\s\\"]+)`
+		replace    = "**REDACTED**"
+	}
+
+	stage.replace {
+		expression = "(?i)\\\"(?:ipAddress|remoteAddress|userId|username|email|sessionId)\\\"\\s*:\\s*\\\"([^\\\"]+)\\\""
+		replace    = "**REDACTED**"
+	}
+
+	stage.replace {
+		expression = `(?i)(?:password|access_token|refresh_token|id_token|authorization|cookie)=\\?"?([^,\s\\"]+)`
+		replace    = "**REDACTED**"
+	}
+
+	stage.replace {
+		expression = "([A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,})"
+		replace    = "**REDACTED**"
+	}
+
+	// Realm names are a small, bounded set and let the shared Keycloak instance
+	// be filtered between production and staging without indexing user data.
+	stage.match {
+		selector = "{service_name=\"keycloak\"}"
+
+		stage.json {
+			expressions = {
+				keycloak_message = "message",
+			}
+		}
+
+		stage.regex {
+			source     = "keycloak_message"
+			expression = `realmName="?(?P<realm>[^",\s]+)`
+		}
+
+		stage.labels {
+			values = {
+				realm = "",
+			}
+		}
+	}
+
+	forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

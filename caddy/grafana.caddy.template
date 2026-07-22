@@ -1,0 +1,12 @@
+# Rendered during deployment; do not put secrets in this file.
+__GRAFANA_DOMAIN__ {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	reverse_proxy hanmaum-grafana:3000
+}

@@ -1,0 +1,7 @@
+.DS_Store
+.env
+*.log
+.idea/
+.vscode/
+caddy/generated/*
+!caddy/generated/.gitkeep

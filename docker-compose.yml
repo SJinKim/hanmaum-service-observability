@@ -1,0 +1,212 @@
+# Shared observability platform for the Hetzner host.
+# Application repositories opt in through Docker labels and the external
+# `observability` network; see README.md.
+
+x-log-rotation: &log-rotation
+  driver: local
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+x-security: &security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    container_name: hanmaum-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=8GB
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - prometheus_data:/prometheus
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: prometheus
+      observability.environment: shared
+    read_only: true
+    tmpfs:
+      - /tmp
+    <<: *security
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      - monitoring-internal
+      - observability
+    logging: *log-rotation
+
+  loki:
+    image: grafana/loki:3.7.3
+    container_name: hanmaum-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./loki/config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: loki
+      observability.environment: shared
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    <<: *security
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      - monitoring-internal
+    logging: *log-rotation
+
+  grafana:
+    image: grafana/grafana:13.1.1
+    container_name: hanmaum-grafana
+    restart: unless-stopped
+    environment:
+      GF_SERVER_DOMAIN: ${GRAFANA_DOMAIN:?GRAFANA_DOMAIN must be set}
+      GF_SERVER_ROOT_URL: https://${GRAFANA_DOMAIN}
+      GF_SERVER_ENFORCE_DOMAIN: "true"
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_LOG_MODE: console
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    labels:
+      observability.logs.enabled: "true"
+      observability.service: grafana
+      observability.environment: shared
+    depends_on:
+      loki:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    <<: *security
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    networks:
+      - monitoring-internal
+      - caddy-proxy
+    logging: *log-rotation
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    container_name: hanmaum-alloy
+    restart: unless-stopped
+    user: "0:0"
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      # Required for Docker discovery and stdout/stderr streaming. See README.md
+      # for the security boundary and the future socket-proxy hardening option.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      loki:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    <<: *security
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      - monitoring-internal
+    logging: *log-rotation
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    container_name: hanmaum-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    read_only: true
+    <<: *security
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    networks:
+      - monitoring-internal
+    logging: *log-rotation
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.5
+    container_name: hanmaum-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    networks:
+      - monitoring-internal
+    logging: *log-rotation
+
+networks:
+  monitoring-internal:
+    driver: bridge
+    internal: true
+  observability:
+    external: true
+  caddy-proxy:
+    external: true
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+  alloy_data:

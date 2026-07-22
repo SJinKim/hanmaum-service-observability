@@ -1,0 +1,69 @@
+name: Validate Observability
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Lint GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
+      - name: Validate Compose and dashboard JSON
+        run: |
+          cp .env.example .env
+          docker compose \
+            --env-file .env \
+            --project-name hanmaum-observability \
+            -f docker-compose.yml \
+            config -q
+          find grafana/dashboards prometheus/targets -name '*.json' \
+            -print0 | xargs -0 -n1 jq empty
+
+      - name: Validate Prometheus configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/prometheus:/etc/prometheus:ro" \
+            --entrypoint /bin/promtool \
+            prom/prometheus:v3.13.1 \
+            check config /etc/prometheus/prometheus.yml
+
+      - name: Validate Alloy configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/alloy/config.alloy:/etc/alloy/config.alloy:ro" \
+            grafana/alloy:v1.18.0 \
+            fmt --test /etc/alloy/config.alloy
+          docker run --rm \
+            -v "$PWD/alloy/config.alloy:/etc/alloy/config.alloy:ro" \
+            grafana/alloy:v1.18.0 \
+            validate /etc/alloy/config.alloy
+
+      - name: Validate Loki configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/loki/config.yml:/etc/loki/config.yml:ro" \
+            grafana/loki:3.7.3 \
+            -verify-config=true -config.file=/etc/loki/config.yml
+
+      - name: Validate rendered Caddy route
+        run: |
+          sed 's|__GRAFANA_DOMAIN__|grafana.example.com|g' \
+            caddy/grafana.caddy.template > /tmp/grafana.caddy
+          docker run --rm \
+            -v /tmp/grafana.caddy:/etc/caddy/Caddyfile:ro \
+            caddy:2.11.4-alpine \
+            caddy adapt --config /etc/caddy/Caddyfile \
+            --adapter caddyfile --validate

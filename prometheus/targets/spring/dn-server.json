@@ -1,0 +1,16 @@
+[
+  {
+    "targets": ["hanmaumApp-backend:8080"],
+    "labels": {
+      "service": "dn-server",
+      "environment": "production"
+    }
+  },
+  {
+    "targets": ["hanmaumApp-backend-staging:8080"],
+    "labels": {
+      "service": "dn-server",
+      "environment": "staging"
+    }
+  }
+]

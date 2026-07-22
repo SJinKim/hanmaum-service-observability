@@ -1,0 +1,9 @@
+[
+  {
+    "targets": ["hanmaumApp-keycloak:9000"],
+    "labels": {
+      "service": "keycloak",
+      "environment": "shared"
+    }
+  }
+]
