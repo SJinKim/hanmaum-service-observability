@@ -78,6 +78,14 @@ jobs:
               exit 1
             fi
 
+            # Alerting files are provisioned only when Grafana starts. Recreate
+            # just Grafana so changed rules are reliably applied on every deploy.
+            docker compose \
+              --env-file .env \
+              --project-name hanmaum-observability \
+              -f docker-compose.yml \
+              up -d --no-deps --force-recreate grafana
+
             # The shared Caddy container imports this repository's rendered
             # route through the read-only conf.d mount configured by dn-server.
             docker exec hanmaum-caddy \
@@ -92,6 +100,14 @@ jobs:
             done
             docker inspect --format='{{.State.Health.Status}}' hanmaum-grafana | grep -q healthy \
               || { echo "Grafana health check failed"; exit 1; }
+
+            ALERTING_ERRORS=$(docker logs hanmaum-grafana 2>&1 \
+              | grep -E 'logger=provisioning\.alerting.*level=error' || true)
+            if [ -n "$ALERTING_ERRORS" ]; then
+              echo "$ALERTING_ERRORS"
+              echo "Grafana alert provisioning failed. Verify that the contact point is named exactly: Discord Hanmaum DEV"
+              exit 1
+            fi
 
             curl -fsS "https://${GRAFANA_DOMAIN}/api/health" \
               || { echo "Grafana HTTPS smoke test failed"; exit 1; }

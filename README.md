@@ -41,6 +41,42 @@ Prometheus instance.
 - **Hanmaum – Keycloak Auth Errors**: login/token failures and Keycloak server
   exceptions.
 
+## Alerting
+
+Grafana-managed alert rules are provisioned from version-controlled YAML files
+under `grafana/provisioning/alerting/`. They use the existing Grafana contact
+point named exactly **`Discord Hanmaum DEV`**. The Discord webhook remains in
+Grafana's persistent database and is never stored in this repository.
+
+Included rules:
+
+- production or staging DN server unavailable for 2 minutes;
+- DN server HTTP 5xx rate above 5% for 5 minutes, with at least 5 errors;
+- Keycloak metrics endpoint unavailable for 2 minutes;
+- more than 10 failed Keycloak login events in 5 minutes;
+- node_exporter or cAdvisor scrape target unavailable;
+- root disk usage above 85% (warning) or 95% (critical);
+- host memory usage above 90% for 10 minutes;
+- an expected application, database, proxy, or observability container missing
+  from cAdvisor for 2 minutes.
+
+Rules use pending periods and minimum event counts to reduce alert noise. They
+route directly to the Discord contact point without replacing the notification
+policy tree configured in Grafana. Provisioned rules are read-only in the UI;
+change their YAML source and redeploy instead. A Grafana restart or provisioning
+reload is required after changing alert files, which the Make target and deploy
+workflow handle automatically.
+
+Validate all alert files with the pinned Grafana version:
+
+```bash
+make validate-alerting
+```
+
+Self-hosted alerting cannot notify when the entire Hetzner host, its network, or
+Grafana itself is unavailable. Keep a separate external uptime check for those
+failure modes.
+
 ## One-time server setup
 
 1. Create `grafana.<domain>` DNS pointing to the Hetzner server. Keep only

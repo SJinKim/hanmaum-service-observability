@@ -58,6 +58,9 @@ jobs:
             grafana/loki:3.7.3 \
             -verify-config=true -config.file=/etc/loki/config.yml
 
+      - name: Validate Grafana alert provisioning
+        run: ./scripts/validate-grafana-alerting.sh
+
       - name: Verify Loki runtime readiness
         run: |
           cleanup() {

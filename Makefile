@@ -1,6 +1,6 @@
 DC = docker compose --env-file .env --project-name hanmaum-observability -f docker-compose.yml
 
-.PHONY: config render-caddy up down pull logs ps reload-prometheus
+.PHONY: config render-caddy up down pull logs ps reload-prometheus validate-alerting
 
 config:
 	$(DC) config -q
@@ -12,6 +12,7 @@ up: render-caddy
 	docker network inspect observability >/dev/null 2>&1 || docker network create observability
 	docker network inspect caddy-proxy >/dev/null 2>&1 || docker network create caddy-proxy
 	$(DC) up -d
+	$(DC) restart grafana
 	docker exec hanmaum-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
 down:
@@ -28,3 +29,6 @@ ps:
 
 reload-prometheus:
 	docker kill --signal=SIGHUP hanmaum-prometheus
+
+validate-alerting:
+	./scripts/validate-grafana-alerting.sh
