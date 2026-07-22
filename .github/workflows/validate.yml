@@ -58,6 +58,27 @@ jobs:
             grafana/loki:3.7.3 \
             -verify-config=true -config.file=/etc/loki/config.yml
 
+      - name: Verify Loki runtime readiness
+        run: |
+          cleanup() {
+            docker compose \
+              --env-file .env \
+              --project-name hanmaum-observability-ci \
+              -f docker-compose.yml \
+              logs loki loki-healthcheck || true
+            docker compose \
+              --env-file .env \
+              --project-name hanmaum-observability-ci \
+              -f docker-compose.yml \
+              down --volumes || true
+          }
+          trap cleanup EXIT
+          docker compose \
+            --env-file .env \
+            --project-name hanmaum-observability-ci \
+            -f docker-compose.yml \
+            up -d --wait --wait-timeout 120 loki-healthcheck
+
       - name: Validate rendered Caddy route
         run: |
           sed 's|__GRAFANA_DOMAIN__|grafana.example.com|g' \

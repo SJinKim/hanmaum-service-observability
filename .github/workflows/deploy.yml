@@ -62,11 +62,21 @@ jobs:
               --project-name hanmaum-observability \
               -f docker-compose.yml \
               pull
-            docker compose \
+            if ! docker compose \
               --env-file .env \
               --project-name hanmaum-observability \
               -f docker-compose.yml \
-              up -d --remove-orphans
+              up -d --remove-orphans; then
+              docker compose \
+                --env-file .env \
+                --project-name hanmaum-observability \
+                -f docker-compose.yml \
+                ps --all || true
+              docker logs hanmaum-loki --tail 200 || true
+              docker inspect --format='{{json .State.Health}}' \
+                hanmaum-loki-healthcheck || true
+              exit 1
+            fi
 
             # The shared Caddy container imports this repository's rendered
             # route through the read-only conf.d mount configured by dn-server.

@@ -58,8 +58,30 @@ services:
       observability.logs.enabled: "true"
       observability.service: loki
       observability.environment: shared
+    read_only: true
+    tmpfs:
+      - /tmp
+    <<: *security
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      - monitoring-internal
+    logging: *log-rotation
+
+  # The official Loki image intentionally contains no shell or HTTP client.
+  # Keep readiness probing in this minimal sidecar instead of weakening Loki.
+  loki-healthcheck:
+    image: busybox:1.37.0
+    container_name: hanmaum-loki-healthcheck
+    restart: unless-stopped
+    command: ["sh", "-c", "while sleep 3600; do :; done"]
+    depends_on:
+      loki:
+        condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://loki:3100/ready"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -71,7 +93,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 16m
     networks:
       - monitoring-internal
     logging: *log-rotation
@@ -104,7 +126,7 @@ services:
       observability.service: grafana
       observability.environment: shared
     depends_on:
-      loki:
+      loki-healthcheck:
         condition: service_healthy
       prometheus:
         condition: service_started
@@ -141,7 +163,7 @@ services:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy/data
     depends_on:
-      loki:
+      loki-healthcheck:
         condition: service_healthy
     read_only: true
     tmpfs:
