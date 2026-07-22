@@ -1,0 +1,309 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: DN Server Operations
+    folder: Observability Alerts
+    interval: 1m
+    rules:
+      - uid: dn-keycloak-admin-failures
+        title: DN Server Keycloak-Admin-Aufrufe schlagen fehl
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: >-
+                sum by (environment) (increase(hanmaum_external_calls_total{
+                job="spring-services", service="dn-server", dependency="keycloak",
+                operation="create_user", outcome!="success"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: $A > 2
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: math
+        dashboardUid: dn-server-overview
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 5m
+        annotations:
+          summary: "Keycloak-Admin-Aufrufe des DN Servers schlagen in {{ $labels.environment }} fehl"
+          description: "Mehr als 2 Keycloak-Benutzeranlagen sind innerhalb von 5 Minuten fehlgeschlagen. Keycloak-Verfügbarkeit, Realm-Konfiguration und Client-Berechtigungen prüfen."
+        labels:
+          severity: critical
+          service: dn-server
+          team: hanmaum
+        isPaused: false
+        notification_settings:
+          receiver: Discord Hanmaum DEV
+          group_by: [grafana_folder, alertname, service, environment]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: dn-notification-fanout-failure
+        title: DN Server Notification-Fan-out fehlgeschlagen
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: >-
+                sum by (environment) (increase(hanmaum_notification_fanout_total{
+                job="spring-services", service="dn-server", outcome="failure"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: $A > 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: math
+        dashboardUid: platform-logs-errors
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        keepFiringFor: 5m
+        annotations:
+          summary: "Benachrichtigungs-Fan-out ist in {{ $labels.environment }} fehlgeschlagen"
+          description: "Mindestens ein Announcement-Fan-out ist in den letzten 5 Minuten fehlgeschlagen. DN-Server-Logs und Datenbankverbindung prüfen."
+        labels:
+          severity: critical
+          service: dn-server
+          team: hanmaum
+        isPaused: false
+        notification_settings:
+          receiver: Discord Hanmaum DEV
+          group_by: [grafana_folder, alertname, service, environment]
+          group_wait: 10s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: dn-fcm-high-failure-rate
+        title: DN Server erhöhte FCM-Fehlerrate
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 1200
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: >-
+                100 * sum by (environment) (increase(hanmaum_fcm_messages_total{
+                job="spring-services", service="dn-server", outcome="failure"}[10m]))
+                / clamp_min(sum by (environment) (increase(hanmaum_fcm_messages_total{
+                job="spring-services", service="dn-server"}[10m])), 1)
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 1200
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: >-
+                sum by (environment) (increase(hanmaum_fcm_messages_total{
+                job="spring-services", service="dn-server"}[10m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: B
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: ($A > 20) && ($B >= 10)
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: math
+        dashboardUid: platform-logs-errors
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 5m
+        annotations:
+          summary: "FCM-Fehlerrate ist in {{ $labels.environment }} erhöht"
+          description: "Mehr als 20 % von mindestens 10 Push-Nachrichten sind im letzten 10-Minuten-Fenster fehlgeschlagen. Firebase-Konfiguration und Fehlergründe in den DN-Server-Logs prüfen."
+        labels:
+          severity: warning
+          service: dn-server
+          team: hanmaum
+        isPaused: false
+        notification_settings:
+          receiver: Discord Hanmaum DEV
+          group_by: [grafana_folder, alertname, service, environment]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: dn-pii-decryption-failure
+        title: DN Server PII-Entschlüsselung fehlgeschlagen
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: >-
+                sum by (environment) (count_over_time({service_name="dn-server"}
+                |= "PII decryption failed" [5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: $A > 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: math
+        dashboardUid: platform-logs-errors
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        keepFiringFor: 5m
+        annotations:
+          summary: "PII-Entschlüsselung ist in {{ $labels.environment }} fehlgeschlagen"
+          description: "Mindestens eine PII-Entschlüsselung ist in den letzten 5 Minuten fehlgeschlagen. Keyring, Key-ID und verschlüsselte Datenintegrität prüfen; keine sensiblen Werte in Discord posten."
+        labels:
+          severity: critical
+          service: dn-server
+          team: hanmaum
+        isPaused: false
+        notification_settings:
+          receiver: Discord Hanmaum DEV
+          group_by: [grafana_folder, alertname, service, environment]
+          group_wait: 10s
+          group_interval: 5m
+          repeat_interval: 4h
+
+      - uid: dn-cleanup-job-failure
+        title: DN Server Cleanup-Job fehlgeschlagen
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: >-
+                sum by (environment) (increase(hanmaum_background_jobs_total{
+                job="spring-services", service="dn-server", job_name="cleanup",
+                outcome="failure"}[30m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: $A > 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: math
+        dashboardUid: platform-logs-errors
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        keepFiringFor: 5m
+        annotations:
+          summary: "Cleanup-Job ist in {{ $labels.environment }} fehlgeschlagen"
+          description: "Der tägliche Cleanup-Job ist in den letzten 30 Minuten fehlgeschlagen. DN-Server-Logs, Datenbankstatus und unterdrückte Teilfehler prüfen."
+        labels:
+          severity: critical
+          service: dn-server
+          team: hanmaum
+        isPaused: false
+        notification_settings:
+          receiver: Discord Hanmaum DEV
+          group_by: [grafana_folder, alertname, service, environment]
+          group_wait: 10s
+          group_interval: 5m
+          repeat_interval: 4h

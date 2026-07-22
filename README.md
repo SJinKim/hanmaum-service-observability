@@ -52,6 +52,11 @@ Included rules:
 
 - production or staging DN server unavailable for 2 minutes;
 - DN server HTTP 5xx rate above 5% for 5 minutes, with at least 5 errors;
+- more than 2 failed DN-server Keycloak Admin API calls in 5 minutes;
+- any failed announcement notification fan-out;
+- FCM failure rate above 20% for at least 10 messages in 10 minutes;
+- any PII decryption failure;
+- any failed scheduled cleanup job;
 - Keycloak metrics endpoint unavailable for 2 minutes;
 - more than 10 failed Keycloak login events in 5 minutes;
 - node_exporter or cAdvisor scrape target unavailable;

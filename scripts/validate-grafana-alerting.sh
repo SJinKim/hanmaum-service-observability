@@ -67,6 +67,11 @@ ALERT_RULES="$(docker exec "${CONTAINER_NAME}" wget -qO- \
 
 EXPECTED_RULE_UIDS=(
   critical-container-missing
+  dn-cleanup-job-failure
+  dn-fcm-high-failure-rate
+  dn-keycloak-admin-failures
+  dn-notification-fanout-failure
+  dn-pii-decryption-failure
   dn-server-high-5xx
   dn-server-unavailable
   host-disk-space-critical
