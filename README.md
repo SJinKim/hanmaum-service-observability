@@ -41,6 +41,11 @@ Prometheus instance.
 - **Hanmaum – Keycloak Auth Errors**: login/token failures and Keycloak server
   exceptions.
 
+Prometheus also scrapes the staging DN PostgreSQL exporter through the private
+`observability` network. The target is
+`hanmaum-postgres-exporter-staging:9187`; PostgreSQL itself remains isolated on
+the application-internal network and publishes no monitoring port.
+
 ## Alerting
 
 Grafana-managed alert rules are provisioned from version-controlled YAML files
