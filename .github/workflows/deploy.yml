@@ -78,9 +78,14 @@ jobs:
               exit 1
             fi
 
-            # prometheus.yml is bind-mounted, so Compose may not recreate the
-            # container when only scrape configuration changes.
-            docker kill --signal=SIGHUP hanmaum-prometheus
+            # A bind-mounted prometheus.yml change is invisible to Compose's
+            # service hash. Recreate Prometheus so every deployed scrape job is
+            # guaranteed to become the active runtime configuration.
+            docker compose \
+              --env-file .env \
+              --project-name hanmaum-observability \
+              -f docker-compose.yml \
+              up -d --no-deps --force-recreate prometheus
 
             # Alerting files are provisioned only when Grafana starts. Recreate
             # just Grafana so changed rules are reliably applied on every deploy.
@@ -104,6 +109,28 @@ jobs:
             done
             docker inspect --format='{{.State.Health.Status}}' hanmaum-grafana | grep -q healthy \
               || { echo "Grafana health check failed"; exit 1; }
+
+            echo "Waiting for staging PostgreSQL metrics..."
+            POSTGRES_QUERY_URL='http://prometheus:9090/api/v1/query?query=pg_up%7Bjob%3D%22postgres%22%2Cenvironment%3D%22staging%22%7D%20%3D%3D%201'
+            POSTGRES_RESULT=""
+            for i in $(seq 1 12); do
+              POSTGRES_RESULT=$(docker exec hanmaum-grafana \
+                wget -qO- "$POSTGRES_QUERY_URL" 2>/dev/null || true)
+              if grep -Eq '"result"[[:space:]]*:[[:space:]]*\[[[:space:]]*\{' \
+                <<<"$POSTGRES_RESULT"; then
+                echo "Staging PostgreSQL target is up"
+                break
+              fi
+              echo "  attempt $i/12: metric not available"
+              sleep 5
+            done
+            grep -Eq '"result"[[:space:]]*:[[:space:]]*\[[[:space:]]*\{' \
+              <<<"$POSTGRES_RESULT" \
+              || {
+                echo "Staging PostgreSQL target did not become healthy"
+                docker logs hanmaum-postgres-exporter-staging --tail 100 || true
+                exit 1
+              }
 
             ALERTING_ERRORS=$(docker logs hanmaum-grafana 2>&1 \
               | grep -E 'logger=provisioning\.alerting.*level=error' || true)
