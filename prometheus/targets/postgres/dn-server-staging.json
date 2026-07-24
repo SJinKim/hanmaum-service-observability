@@ -1,0 +1,10 @@
+[
+  {
+    "targets": ["hanmaum-postgres-exporter-staging:9187"],
+    "labels": {
+      "service": "postgres",
+      "database": "dn-server",
+      "environment": "staging"
+    }
+  }
+]

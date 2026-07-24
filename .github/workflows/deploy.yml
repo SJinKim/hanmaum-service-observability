@@ -78,6 +78,10 @@ jobs:
               exit 1
             fi
 
+            # prometheus.yml is bind-mounted, so Compose may not recreate the
+            # container when only scrape configuration changes.
+            docker kill --signal=SIGHUP hanmaum-prometheus
+
             # Alerting files are provisioned only when Grafana starts. Recreate
             # just Grafana so changed rules are reliably applied on every deploy.
             docker compose \

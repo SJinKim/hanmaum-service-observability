@@ -43,3 +43,11 @@ scrape_configs:
       - files:
           - /etc/prometheus/targets/keycloak/*.json
         refresh_interval: 30s
+
+  # PostgreSQL exporters bridge only their application-internal database
+  # network to the private observability network. Databases stay unexposed.
+  - job_name: postgres
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/postgres/*.json
+        refresh_interval: 30s
