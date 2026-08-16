@@ -91,3 +91,6 @@ jobs:
             caddy:2.11.4-alpine \
             caddy adapt --config /etc/caddy/Caddyfile \
             --adapter caddyfile --validate
+
+      - name: Verify shared edge ownership contract
+        run: ./scripts/test-shared-edge-ownership.sh

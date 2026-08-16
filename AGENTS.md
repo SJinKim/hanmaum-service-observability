@@ -27,7 +27,10 @@ Shared, self-hosted observability platform for Hanmaum services.
 8. Validate Compose, Prometheus, Loki, Alloy, dashboard JSON, and workflows
    before finishing a change.
 9. Keep the single-node deployment simple until scale proves it insufficient.
-10. Logs may contain operationally sensitive data. Retention and redaction
+10. The separate `graceops-edge` repository owns Caddy and all public routes.
+    This repository may attach Grafana to `caddy-proxy`, but must never create,
+    recreate, configure, or reload the shared proxy.
+11. Logs may contain operationally sensitive data. Retention and redaction
     changes require a security review.
 
 ## Layout
@@ -38,7 +41,7 @@ Shared, self-hosted observability platform for Hanmaum services.
 - `alloy/` — Docker discovery, labels, redaction, and Loki delivery
 - `grafana/provisioning/` — data sources and dashboard providers
 - `grafana/dashboards/` — platform and service dashboards
-- `caddy/` — rendered Grafana route imported by the shared host proxy
+- `caddy/` — legacy rollback asset retained during the edge ownership migration
 
 ## Service onboarding
 

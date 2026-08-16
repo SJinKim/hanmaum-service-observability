@@ -26,7 +26,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml,alloy,caddy,grafana,loki,prometheus"
+          source: "docker-compose.yml,alloy,grafana,loki,prometheus"
           target: /opt/hanmaum-service-observability
 
       - name: Deploy via SSH
@@ -43,14 +43,13 @@ jobs:
               || { echo "Missing /opt/hanmaum-service-observability/.env"; exit 1; }
 
             set -a && source .env && set +a
-            mkdir -p caddy/generated
-            sed "s|__GRAFANA_DOMAIN__|${GRAFANA_DOMAIN}|g" \
-              caddy/grafana.caddy.template > caddy/generated/grafana.caddy
-            grep -q '__GRAFANA_DOMAIN__' caddy/generated/grafana.caddy \
-              && { echo "Grafana Caddy route was not rendered"; exit 1; }
 
             docker network create observability 2>/dev/null || true
-            docker network create caddy-proxy 2>/dev/null || true
+            docker network inspect caddy-proxy > /dev/null
+            docker inspect --format='{{.State.Running}}' hanmaum-caddy | grep -q true
+            EDGE_OWNER=$(docker inspect --format='{{index .Config.Labels "graceops.edge.owner"}}' hanmaum-caddy)
+            test -z "$EDGE_OWNER" -o "$EDGE_OWNER" = "graceops-edge" \
+              || { echo "Unexpected shared edge owner: $EDGE_OWNER"; exit 1; }
 
             docker compose \
               --env-file .env \
@@ -94,11 +93,6 @@ jobs:
               --project-name hanmaum-observability \
               -f docker-compose.yml \
               up -d --no-deps --force-recreate grafana
-
-            # The shared Caddy container imports this repository's rendered
-            # route through the read-only conf.d mount configured by dn-server.
-            docker exec hanmaum-caddy \
-              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
             echo "Waiting for Grafana..."
             for i in $(seq 1 12); do
