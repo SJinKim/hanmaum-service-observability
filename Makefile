@@ -1,6 +1,8 @@
 DC = docker compose --env-file .env --project-name hanmaum-observability -f docker-compose.yml
+DOCKER_SOCKET_GID ?= $(shell stat -c '%g' /var/run/docker.sock 2>/dev/null || stat -f '%g' /var/run/docker.sock)
+export DOCKER_SOCKET_GID
 
-.PHONY: config render-legacy-caddy up down pull logs ps reload-prometheus validate-alerting
+.PHONY: config render-legacy-caddy up down pull logs ps reload-prometheus validate-alerting validate-alloy
 
 config:
 	$(DC) config -q
@@ -33,3 +35,6 @@ reload-prometheus:
 
 validate-alerting:
 	./scripts/validate-grafana-alerting.sh
+
+validate-alloy:
+	./scripts/validate-alloy-runtime.sh

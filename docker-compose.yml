@@ -150,7 +150,11 @@ services:
     image: grafana/alloy:v1.18.0
     container_name: hanmaum-alloy
     restart: unless-stopped
-    user: "0:0"
+    # The image data directory is owned by the built-in alloy user (473).
+    # Add only the host Docker socket group instead of running the process as root.
+    user: "473:473"
+    group_add:
+      - "${DOCKER_SOCKET_GID:?DOCKER_SOCKET_GID must be set}"
     command:
       - run
       - --server.http.listen-addr=127.0.0.1:12345

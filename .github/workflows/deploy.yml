@@ -43,6 +43,10 @@ jobs:
               || { echo "Missing /opt/hanmaum-service-observability/.env"; exit 1; }
 
             set -a && source .env && set +a
+            export DOCKER_SOCKET_GID
+            DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
+            [[ "$DOCKER_SOCKET_GID" =~ ^[0-9]+$ ]] \
+              || { echo "Cannot determine Docker socket group ID"; exit 1; }
 
             docker network create observability 2>/dev/null || true
             docker network inspect caddy-proxy > /dev/null
@@ -93,6 +97,26 @@ jobs:
               --project-name hanmaum-observability \
               -f docker-compose.yml \
               up -d --no-deps --force-recreate grafana
+
+            echo "Waiting for Alloy..."
+            for i in $(seq 1 12); do
+              STATUS=$(docker inspect --format='{{.State.Status}}' hanmaum-alloy 2>/dev/null || echo missing)
+              [ "$STATUS" = running ] && break
+              echo "  attempt $i/12: $STATUS"
+              sleep 5
+            done
+            docker inspect --format='{{.State.Status}}' hanmaum-alloy | grep -q running \
+              || { echo "Alloy is not running"; exit 1; }
+            sleep 10
+            docker inspect --format='{{.State.Status}}' hanmaum-alloy | grep -q running \
+              || { echo "Alloy did not remain running"; exit 1; }
+            ALLOY_PERMISSION_ERRORS=$(docker logs hanmaum-alloy 2>&1 \
+              | grep -F 'permission denied' || true)
+            if [ -n "$ALLOY_PERMISSION_ERRORS" ]; then
+              echo "$ALLOY_PERMISSION_ERRORS"
+              echo "Alloy storage or socket permissions are invalid"
+              exit 1
+            fi
 
             echo "Waiting for Grafana..."
             for i in $(seq 1 12); do
