@@ -51,6 +51,9 @@ jobs:
             grafana/alloy:v1.18.0 \
             validate /etc/alloy/config.alloy
 
+      - name: Validate Alloy runtime permissions
+        run: ./scripts/validate-alloy-runtime.sh
+
       - name: Validate Loki configuration
         run: |
           docker run --rm \

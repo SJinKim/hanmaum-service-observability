@@ -103,6 +103,7 @@ failure modes.
    GRAFANA_DOMAIN=grafana.example.com
    GRAFANA_ADMIN_USER=admin
    GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+   DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
    EOF
    chmod 600 .env
    # Edit GRAFANA_DOMAIN and save GRAFANA_PASSWORD in a password manager.
@@ -201,8 +202,11 @@ session, email, and IP fields before Loki persists the log line.
   TSDB at 8 GB.
 - PostgreSQL logs are not collected by default because errors and statements
   can contain personal data.
-- Alloy needs Docker API access to stream logs. It has no public port, runs with
-  a read-only root filesystem, dropped capabilities, and `no-new-privileges`.
+- Alloy needs Docker API access to stream logs. It runs as its non-root
+  `473:473` image user with only the host Docker socket group added. Its data
+  volume remains owned by that user; the root filesystem is read-only and all
+  capabilities are dropped with `no-new-privileges`.
+  The Docker socket group still grants root-equivalent control over Docker.
   A maintained Docker socket proxy allowing only container read/log endpoints
   is the next hardening step if the platform grows.
 - cAdvisor requires privileged host access to inspect containers. It has no
