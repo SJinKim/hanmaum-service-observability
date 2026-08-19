@@ -92,7 +92,7 @@ failure modes.
 1. Create `grafana.<domain>` DNS pointing to the Hetzner server. Keep only
    ports 80/443 public; never expose 3000, 9090, 3100, 9100, or 12345.
 2. Create the server-local directory and environment before deploying the
-   Caddy mount, so Docker does not create the bind-mount directory as root:
+   observability stack:
 
    ```bash
    sudo mkdir -p /opt/hanmaum-service-observability
@@ -108,8 +108,8 @@ failure modes.
    # Edit GRAFANA_DOMAIN and save GRAFANA_PASSWORD in a password manager.
    ```
 
-3. Deploy the DN server's generic Caddy `conf.d` mount once. This repository
-   owns and renders the Grafana route under `caddy/generated/`.
+3. Deploy the shared `graceops-edge` stack once. This repository attaches only
+   Grafana to its external `caddy-proxy` network; it does not manage Caddy.
 4. Start manually or configure the GitHub `production` environment and the
    `SERVER_HOST`, `SERVER_USER`, and `SSH_PRIVATE_KEY` secrets before running
    the manual deploy workflow:
@@ -173,8 +173,10 @@ The DN server repository provides only the application-side contract:
 - Production and staging backends join `observability`.
 - Keycloak exposes `/metrics` on its private management port `9000`.
 - Backend, Keycloak, and Caddy logs use explicit service/environment labels.
-- Caddy only provides a generic read-only `conf.d` mount; this repository owns
-  the rendered Grafana route and reloads Caddy during deployment.
+- The separate `graceops-edge` repository owns Caddy and the Grafana route.
+  Observability deployment only verifies that the shared edge is available.
+- `caddy/` remains temporarily as a rollback-only migration asset and is not
+  copied, rendered, or reloaded by normal deployment.
 - Public Caddy continues to deny `/actuator/*` except health, so Prometheus
   metrics are not internet-accessible.
 
